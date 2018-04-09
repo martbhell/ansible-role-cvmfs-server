@@ -3,9 +3,19 @@
   command: 'cvmfs_server list'
   register: stratum0_list
 
-- name: Create Stratum-0
+- name: Create Stratum-0 without S3
   command: 'cvmfs_server mkfs -w {{ repository_url }} -o cvmfs {{ repository_name }}'
-  when: repository_name not in stratum0_list.stdout
+  when: repository_name not in stratum0_list.stdout and cvmfs_s3_enabled == False
+
+- name: template in mys3 config
+  template:
+    src: 'mys3.conf.j2'
+    dest: '/etc/cvmfs/mys3.conf'
+    mode: '0600'
+
+- name: Create Stratum-0 with S3
+  command: 'cvmfs_server mkfs -w {{ repository_url }} -o cvmfs -s /etc/cvmfs/mys3.conf {{ repository_name }}'
+  when: repository_name not in stratum0_list.stdout and cvmfs_s3_enabled
 
 - name: Publish test content to Stratum-0
   command: '{{ item }}'
@@ -27,10 +37,10 @@
     minute: 0
     hour: 0
     user: root
-    job: 'Cvmfs-stratum0-resign'
+    job: '/usr/local/bin/Cvmfs-stratum0-resign >> /var/log/Cvmfs-stratum0-resign.log 2>&1'
     cron_file: cvmfs_server_resign
 
 - name: Restart Apache
   systemd:
     name: apache2
-    state: reload
+    state: restarted
